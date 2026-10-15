@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "title": "Seven Color Warmup",
+  "bpm": 120,
+  "preset": "arcade",
+  "notes": [
+    { "beat": 0, "midi": 60, "velocity": 90, "duration": 0.5 },
+    { "beat": 1, "midi": 62, "velocity": 90, "duration": 0.5 },
+    { "beat": 2, "midi": 64, "velocity": 90, "duration": 0.5 },
+    { "beat": 3, "midi": 65, "velocity": 90, "duration": 0.5 },
+    { "beat": 4, "midi": 67, "velocity": 90, "duration": 0.5 },
+    { "beat": 5, "midi": 69, "velocity": 90, "duration": 0.5 },
+    { "beat": 6, "midi": 71, "velocity": 90, "duration": 0.5 },
+    { "beat": 7, "midi": 72, "velocity": 100, "duration": 1.0 }
+  ]
+}

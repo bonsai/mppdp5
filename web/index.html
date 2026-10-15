@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>mpp5 — Body Swim</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #03172b; color: #eafaff; overflow: hidden; }
+    #app { min-height: 100svh; display: flex; flex-direction: column; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:12px 18px; background:#061e35; }
+    h1 { margin:0; font-size:clamp(1rem,2.4vw,1.4rem); letter-spacing:.04em; }
+    #status { font-size:.88rem; color:#9bd9e8; text-align:right; }
+    main { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px; }
+    #canvas-holder { width:min(100%, 1280px); }
+    #canvas-holder canvas { display:block; width:100%!important; height:auto!important; border-radius:12px; box-shadow:0 12px 44px #0007; }
+    footer { display:flex; flex-wrap:wrap; justify-content:center; gap:8px 20px; padding:10px; color:#c0e5ef; font-size:.85rem; background:#061e35; }
+    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#ffb15c; margin-right:6px; }
+    .dot.ok { background:#65f2bf; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🐬 mpp5 · BODY SWIM</h1>
+    <div id="status"><span class="dot"></span> Python / MediaPipe に接続中…</div>
+  </header>
+  <main><div id="canvas-holder"></div></main>
+  <footer>
+    <span>↔ 体を左右に傾ける：イルカが泳ぐ</span>
+    <span>🙌 両腕を広げる：泡の輪</span>
+    <span>↧ しゃがむ：深海モード</span>
+  </footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
+<script src="/web/sketch.js"></script>
+</body>
+</html>

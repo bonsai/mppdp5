@@ -6,10 +6,12 @@
 
 1. Processing 4をインストール
 2. Processing IDEの **Sketch → Import Library… → Manage Libraries…** から `oscP5` をインストール
-3. `psychedelic_pose_projection.pde` をProcessing IDEで開いてRun
+3. `psychedelic_pose_projection/psychedelic_pose_projection.pde` をProcessing IDEで開いてRun
 4. リポジトリルートで `python server.py` を起動
 
 PythonはOSCを `127.0.0.1:12000/UDP` に送信します。海中ゲームも必要なら同時に `http://127.0.0.1:8765` を開きます。
+
+`start.ps1` はProcessingのCLI実行が可能な環境ならスケッチを実行し、それ以外ではスケッチフォルダを開きます。
 
 ## 境界
 

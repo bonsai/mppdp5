@@ -67,11 +67,8 @@ config = {
 config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
-say "Checking installed command and Python test dependencies."
-"$VENV_DIR/bin/puredata-mcp" --help >/dev/null 2>&1 || {
-  say "The MCP entry point did not accept --help; checking import instead."
-  "$VENV_DIR/bin/python" -c 'import puredata_mcp.server'
-}
+say "Checking that the MCP server module imports successfully."
+"$VENV_DIR/bin/python" -c 'import puredata_mcp.server'
 
 say "Installation complete."
 printf '\nNext steps:\n'

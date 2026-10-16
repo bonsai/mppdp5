@@ -1,0 +1,59 @@
+@startuml mppdp5-software-factory-gates
+title mppdp5 — Software Factory / Quality Gates
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+[*] --> PRD
+state "Requirements\n(PRD)" as PRD
+state "Design\n(UML + Ontology + ADR)" as Design
+state "Implementation\n(GitHub Issue / PR)" as Build
+state "Verification\n(Tests + Contracts)" as Test
+state "Deploy" as Deploy
+state "Observe" as Observe
+state "Kaizen\n(continuous improvement)" as Kaizen
+
+PRD --> G1 : requirements ready
+state "GATE-REQUIREMENTS-001" as G1 <<choice>>
+G1 --> Design : pass
+G1 --> PRD : fail / revise
+
+Design --> G2 : design ready
+state "GATE-DESIGN-001" as G2 <<choice>>
+G2 --> Build : pass
+G2 --> Design : fail / revise
+
+Build --> G3 : implementation ready
+state "GATE-IMPLEMENTATION-001" as G3 <<choice>>
+G3 --> Test : pass
+G3 --> Build : fail / revise
+
+Test --> G4 : checks complete
+state "GATE-TEST-001" as G4 <<choice>>
+G4 --> Deploy : pass
+G4 --> Build : fail / fix
+
+Deploy --> Observe
+Observe --> Kaizen
+Kaizen --> PRD : new requirements / improvement
+
+note bottom of Build
+  Kanban pull flow:
+  respect WIP limits,
+  make blocked work visible,
+  start only when downstream
+  review/test capacity exists.
+end note
+
+note bottom of Test
+  Quality is built in.
+  Failed checks must not
+  move downstream.
+end note
+
+note bottom of Observe
+  Failures are andon signals.
+  Turn recurring defects into
+  traceable improvement issues.
+end note
+@enduml

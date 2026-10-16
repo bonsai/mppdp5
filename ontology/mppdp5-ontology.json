@@ -1,0 +1,255 @@
+{
+  "ontology_id": "mppdp5-ecosystem",
+  "version": "1.0.0",
+  "title": {
+    "en": "mppdp5 Ontology",
+    "ja": "mppdp5 オントロジ"
+  },
+  "purpose": "One pose interpretation pipeline feeding multiple loosely coupled renderers through explicit transport contracts.",
+  "entities": [
+    {
+      "id": "camera",
+      "label": "Camera",
+      "ja": "カメラ",
+      "kind": "InputDevice"
+    },
+    {
+      "id": "frame",
+      "label": "VideoFrame",
+      "ja": "映像フレーム",
+      "kind": "RawObservation",
+      "privacy": "ephemeral; do not persist or transmit"
+    },
+    {
+      "id": "pose-landmarks",
+      "label": "PoseLandmarks",
+      "ja": "姿勢ランドマーク",
+      "kind": "Observation",
+      "fields": [
+        "points",
+        "timestamp",
+        "visibility"
+      ]
+    },
+    {
+      "id": "motion-features",
+      "label": "MotionFeatures",
+      "ja": "動作特徴量",
+      "kind": "DerivedObservation",
+      "fields": [
+        "leftSpeed",
+        "rightSpeed",
+        "hipSway",
+        "bodyLean",
+        "armsSpread",
+        "squatState"
+      ]
+    },
+    {
+      "id": "interaction-state",
+      "label": "InteractionState",
+      "ja": "インタラクション状態",
+      "kind": "SemanticState",
+      "fields": [
+        "movement",
+        "confidence",
+        "timestamp"
+      ]
+    },
+    {
+      "id": "python-server",
+      "label": "PythonServer",
+      "ja": "Pythonサーバー",
+      "kind": "Runtime"
+    },
+    {
+      "id": "opencv",
+      "label": "OpenCV",
+      "ja": "OpenCV",
+      "kind": "CaptureAdapter"
+    },
+    {
+      "id": "mediapipe-pose",
+      "label": "MediaPipe Pose",
+      "ja": "MediaPipe Pose",
+      "kind": "PoseEstimator"
+    },
+    {
+      "id": "pose-interpreter",
+      "label": "PoseInterpreter",
+      "ja": "姿勢解釈器",
+      "kind": "Interpreter"
+    },
+    {
+      "id": "websocket",
+      "label": "WebSocketPublisher",
+      "ja": "WebSocket配信アダプター",
+      "kind": "TransportAdapter"
+    },
+    {
+      "id": "osc",
+      "label": "OSCPublisher",
+      "ja": "OSC配信アダプター",
+      "kind": "TransportAdapter"
+    },
+    {
+      "id": "state-json",
+      "label": "StateJSON",
+      "ja": "状態JSON",
+      "kind": "WireFormat"
+    },
+    {
+      "id": "osc-message",
+      "label": "OSCMessage",
+      "ja": "OSCメッセージ",
+      "kind": "WireFormat"
+    },
+    {
+      "id": "p5-renderer",
+      "label": "p5.js Renderer",
+      "ja": "p5.js描画器",
+      "kind": "Renderer"
+    },
+    {
+      "id": "processing-renderer",
+      "label": "Processing Renderer",
+      "ja": "Processing描画器",
+      "kind": "Renderer"
+    },
+    {
+      "id": "underwater-game",
+      "label": "UnderwaterGame",
+      "ja": "海中ゲーム",
+      "kind": "Experience"
+    },
+    {
+      "id": "psychedelic-projection",
+      "label": "PsychedelicProjection",
+      "ja": "サイケデリック投影",
+      "kind": "Experience"
+    },
+    {
+      "id": "calibration-config",
+      "label": "CalibrationConfig",
+      "ja": "キャリブレーション設定",
+      "kind": "Configuration"
+    },
+    {
+      "id": "privacy-policy",
+      "label": "PrivacyPolicy",
+      "ja": "プライバシー制約",
+      "kind": "Constraint"
+    }
+  ],
+  "relations": [
+    {
+      "from": "camera",
+      "type": "produces",
+      "to": "frame"
+    },
+    {
+      "from": "opencv",
+      "type": "captures",
+      "to": "frame"
+    },
+    {
+      "from": "mediapipe-pose",
+      "type": "estimates",
+      "to": "pose-landmarks"
+    },
+    {
+      "from": "pose-landmarks",
+      "type": "inputTo",
+      "to": "pose-interpreter"
+    },
+    {
+      "from": "pose-interpreter",
+      "type": "derives",
+      "to": "motion-features"
+    },
+    {
+      "from": "pose-interpreter",
+      "type": "interprets",
+      "to": "interaction-state"
+    },
+    {
+      "from": "websocket",
+      "type": "serializesAs",
+      "to": "state-json"
+    },
+    {
+      "from": "state-json",
+      "type": "deliversTo",
+      "to": "p5-renderer"
+    },
+    {
+      "from": "osc",
+      "type": "encodesAs",
+      "to": "osc-message"
+    },
+    {
+      "from": "osc-message",
+      "type": "deliversTo",
+      "to": "processing-renderer"
+    },
+    {
+      "from": "p5-renderer",
+      "type": "renders",
+      "to": "underwater-game"
+    },
+    {
+      "from": "processing-renderer",
+      "type": "renders",
+      "to": "psychedelic-projection"
+    },
+    {
+      "from": "python-server",
+      "type": "orchestrates",
+      "to": "pose-interpreter"
+    },
+    {
+      "from": "python-server",
+      "type": "uses",
+      "to": "calibration-config"
+    },
+    {
+      "from": "python-server",
+      "type": "mustEnforce",
+      "to": "privacy-policy"
+    }
+  ],
+  "vocabularies": {
+    "movementState": [
+      "Neutral",
+      "LeanLeft",
+      "LeanRight",
+      "ArmsSpread",
+      "Squat",
+      "TrackingLost"
+    ],
+    "transport": [
+      "WebSocket",
+      "OSC/UDP"
+    ],
+    "renderer": [
+      "p5.js",
+      "Processing"
+    ],
+    "dataType": [
+      "VideoFrame",
+      "PoseLandmarks",
+      "MotionFeatures",
+      "InteractionState",
+      "StateJSON",
+      "OSCMessage"
+    ]
+  },
+  "invariants": [
+    "Pose estimation and semantic interpretation happen once in the Python pipeline.",
+    "Renderers consume published state and do not independently run MediaPipe or reinterpret pose.",
+    "Raw camera frames are processed locally and are not persisted or transmitted.",
+    "When tracking is lost, derived features return to neutral values and InteractionState indicates TrackingLost or neutral state.",
+    "Transport adapters and renderers remain replaceable through stable message contracts."
+  ],
+  "implementation_note": "This is a proposed ontology inferred from the repository README; verify field names and runtime behavior against source files before treating every field as implemented."
+}

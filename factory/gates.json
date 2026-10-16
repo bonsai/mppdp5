@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0.0",
+  "project": "bonsai/mppdp5",
+  "status": "proposed",
+  "principles": {
+    "traceability_required": true,
+    "failed_gate_blocks_transition": true,
+    "evidence_required": true,
+    "raw_video_persistence_allowed": false,
+    "raw_video_transport_allowed": false
+  },
+  "gates": [
+    {
+      "gate_id": "GATE-REQUIREMENTS-001",
+      "name": "Requirements readiness",
+      "stage": "prd",
+      "inputs": ["docs/prd.md"],
+      "checks": [
+        "problem_and_scope_are_defined",
+        "acceptance_criteria_are_testable",
+        "privacy_and_safety_constraints_are_documented"
+      ],
+      "pass_action": "allow_design",
+      "fail_action": "return_to_prd",
+      "evidence": ["requirements_review"]
+    },
+    {
+      "gate_id": "GATE-DESIGN-001",
+      "name": "Architecture design",
+      "stage": "design",
+      "inputs": [
+        "docs/ontology-ecosystem.puml",
+        "docs/robustness-diagram.puml",
+        "ontology/mppdp5-ontology.json",
+        "docs/adr/"
+      ],
+      "checks": [
+        "components_have_clear_responsibilities",
+        "interfaces_and_protocols_are_documented",
+        "tracking_lost_behavior_is_defined",
+        "privacy_invariants_are_preserved",
+        "design_matches_implemented_code_or_is_marked_proposed"
+      ],
+      "pass_action": "allow_implementation",
+      "fail_action": "return_to_design",
+      "evidence": ["diagram_validation", "design_review"]
+    },
+    {
+      "gate_id": "GATE-IMPLEMENTATION-001",
+      "name": "Implementation readiness",
+      "stage": "implementation",
+      "inputs": ["GitHub Issue", "Pull Request"],
+      "checks": [
+        "change_is_traceable_to_an_issue",
+        "scope_and_acceptance_criteria_are_met",
+        "no_unrelated_changes_are_included"
+      ],
+      "pass_action": "allow_tests",
+      "fail_action": "return_to_implementation",
+      "evidence": ["pull_request_review", "diff"]
+    },
+    {
+      "gate_id": "GATE-TEST-001",
+      "name": "Quality and contract checks",
+      "stage": "test",
+      "inputs": ["CI results", "schemas/"],
+      "checks": [
+        "automated_tests_pass",
+        "protocol_contracts_are_validated_when_defined",
+        "tracking_loss_resets_state_to_safe_neutral_values",
+        "raw_video_is_not_persisted_or_transmitted"
+      ],
+      "pass_action": "allow_deploy",
+      "fail_action": "return_to_implementation",
+      "evidence": ["test_report", "schema_validation_report", "privacy_check"]
+    },
+    {
+      "gate_id": "GATE-OBSERVATION-001",
+      "name": "Operational learning",
+      "stage": "observe",
+      "inputs": ["runtime observations", "issues"],
+      "checks": [
+        "regressions_and_failures_are_logged",
+        "recurring_defects_have_follow_up_issues",
+        "lessons_update_requirements_or_design_when_needed"
+      ],
+      "pass_action": "feed_kaizen",
+      "fail_action": "create_follow_up_issue",
+      "evidence": ["observation_notes", "follow_up_issue_links"]
+    }
+  ]
+}

@@ -62,3 +62,10 @@ python server.py
 
 - [psychedelic-pose-projection](https://github.com/bonsai/psychedelic-pose-projection): 研究・評価・エフェクト設計。Javaランタイムは本リポジトリに集約
 - [air-shodo](https://github.com/bonsai/air-shodo): モジュール分割と疎結合の参考
+
+## Ontology / Ecosystem UML
+
+- [Ontology JSON](ontology/mppdp5-ontology.json): entities, relations, vocabularies, and architectural invariants
+- [PlantUML ecosystem diagram](docs/ontology-ecosystem.puml): camera → OpenCV → MediaPipe Pose → Python interpretation → WebSocket/OSC → p5.js/Processing renderers
+
+The ontology is an architecture proposal based on this README. Confirm exact field names and behavior against implementation before treating all entries as implemented.

@@ -69,5 +69,7 @@ python server.py
 - [PlantUML ecosystem diagram](docs/ontology-ecosystem.puml): camera → OpenCV → MediaPipe Pose → Python interpretation → WebSocket/OSC → p5.js/Processing renderers
 - [PlantUML robustness diagram](docs/robustness-diagram.puml): Boundary / Control / Entity, data flow, tracking-loss recovery, and privacy boundaries
 - [Browser UML viewer](https://bonsai.github.io/mppdp5/): JavaScript-powered PlantUML preview, source editing, and SVG opening (GitHub Pages deployment via Actions)
+- [ADR-0001: FastAPI + MCP + Processing Java](docs/adr/0001-fastapi-mcp-processing-java.md): API/MCP separation, local-first security, and Java renderer decision
+- [Implementation issue #12](https://github.com/bonsai/mppdp5/issues/12): typed status API, FastMCP read-only tools, and contract tests
 
 The ontology is an architecture proposal based on this README. Confirm exact field names and behavior against implementation before treating all entries as implemented.

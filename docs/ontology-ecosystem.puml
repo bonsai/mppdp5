@@ -1,0 +1,146 @@
+@startuml mppdp5-ecosystem
+title mppdp5 — Ontology & Ecosystem
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+package "Input / Sensing" {
+  class Camera <<InputDevice>> {
+    +frames: VideoFrame
+  }
+  class OpenCV <<CaptureAdapter>> {
+    +readFrame()
+  }
+  class MediaPipePose <<PoseEstimator>> {
+    +infer(frame): PoseLandmarks
+  }
+}
+
+package "Interpretation / Ontology" {
+  class PoseLandmarks <<Observation>> {
+    +points: Landmark[]
+    +timestamp: Time
+    +visibility: Confidence[]
+  }
+  class MotionFeatures <<DerivedObservation>> {
+    +leftSpeed: float
+    +rightSpeed: float
+    +hipSway: float
+    +bodyLean: float
+    +armsSpread: float
+    +squatState: bool
+  }
+  class PoseInterpreter <<Interpreter>> {
+    +filterConfidence()
+    +deriveFeatures()
+    +resetNeutral()
+  }
+  class InteractionState <<SemanticState>> {
+    +movement: MovementState
+    +confidence: float
+    +timestamp: Time
+  }
+  enum MovementState {
+    Neutral
+    LeanLeft
+    LeanRight
+    ArmsSpread
+    Squat
+    TrackingLost
+  }
+}
+
+package "Transport / Protocol" {
+  interface StatePublisher
+  class WebSocketPublisher <<Adapter>> {
+    +publish(InteractionState)
+  }
+  class OSCPublisher <<Adapter>> {
+    +publish(PoseLandmarks, MotionFeatures)
+  }
+  class StateJSON <<WireFormat>> {
+    +schemaVersion: string
+  }
+  class OSCMessage <<WireFormat>> {
+    +address: string
+    +payload: number[]
+  }
+}
+
+package "Renderers / Experiences" {
+  interface Renderer {
+    +consume(state)
+    +render()
+  }
+  class P5Renderer <<WebRenderer>> {
+    +dolphin
+    +bubbles
+    +underwaterEffects
+  }
+  class ProcessingRenderer <<ProjectionRenderer>> {
+    +skeleton
+    +trails
+    +afterimages
+    +hipRipples
+  }
+  class UnderwaterGame <<Experience>>
+  class PsychedelicProjection <<Experience>>
+}
+
+package "Runtime / Operations" {
+  class PythonServer <<Runtime>> {
+    +startCamera()
+    +runInferenceLoop()
+    +serveWebSocket()
+    +sendOSC()
+  }
+  class CalibrationConfig <<Configuration>> {
+    +cameraIndex: int
+    +confidenceThreshold: float
+    +oscHost: string
+    +oscPort: int
+  }
+  class PrivacyPolicy <<Constraint>> {
+    +storeRawVideo: false
+    +transmitRawVideo: false
+    +localProcessing: true
+  }
+}
+
+Camera --> OpenCV : frames
+OpenCV --> MediaPipePose : frame
+MediaPipePose --> PoseLandmarks : estimates
+PoseLandmarks --> PoseInterpreter : input
+PoseInterpreter --> MotionFeatures : derives
+PoseInterpreter --> InteractionState : interprets
+PoseInterpreter --> OSCPublisher : numeric features
+PoseInterpreter --> WebSocketPublisher : semantic state
+WebSocketPublisher --> StateJSON : serializes
+StateJSON --> P5Renderer : WebSocket
+OSCPublisher --> OSCMessage : encodes
+OSCMessage --> ProcessingRenderer : UDP / OSC
+P5Renderer ..> UnderwaterGame : renders
+ProcessingRenderer ..> PsychedelicProjection : renders
+PythonServer o-- OpenCV
+PythonServer o-- MediaPipePose
+PythonServer o-- PoseInterpreter
+PythonServer o-- WebSocketPublisher
+PythonServer o-- OSCPublisher
+PythonServer --> CalibrationConfig : reads
+PythonServer ..> PrivacyPolicy : enforces
+P5Renderer ..|> Renderer
+ProcessingRenderer ..|> Renderer
+
+note right of PoseInterpreter
+  Single interpretation point:
+  estimate once, interpret once,
+  route to multiple renderers.
+end note
+
+note bottom of PrivacyPolicy
+  Raw camera frames stay in memory.
+  Only derived numeric/semantic state
+  is sent over local WebSocket / OSC.
+end note
+@enduml

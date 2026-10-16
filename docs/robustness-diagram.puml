@@ -1,0 +1,77 @@
+@startuml mppdp5-robustness
+title mppdp5 — Robustness Diagram (Boundary / Control / Entity)
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+
+actor "利用者" as User
+actor "カメラ" as Camera
+
+package "Boundary / 入出力境界" {
+  boundary "CameraCapture\n(OpenCV)" as Capture
+  boundary "Browser UI\n(p5.js)" as Browser
+  boundary "Processing Sketch\n(oscP5)" as Projection
+  boundary "WebSocket Endpoint" as WSBoundary
+  boundary "OSC/UDP Endpoint" as OSCBoundary
+}
+
+package "Control / 制御" {
+  control "Pose Pipeline\n(server.py)" as Pipeline
+  control "Pose Estimator\n(MediaPipe Pose)" as Estimator
+  control "Pose Interpreter" as Interpreter
+  control "WebSocket Publisher" as WSPublisher
+  control "OSC Publisher" as OSCPublisher
+  control "Tracking Recovery" as Recovery
+}
+
+package "Entity / ドメインデータ" {
+  entity "VideoFrame\n(ephemeral)" as Frame
+  entity "PoseLandmarks" as Landmarks
+  entity "MotionFeatures" as Features
+  entity "InteractionState" as State
+  entity "CalibrationConfig" as Config
+  entity "PrivacyPolicy" as Privacy
+}
+
+User --> Browser : 身体動作で操作
+Camera --> Capture : video frames
+Capture --> Pipeline : frame (memory only)
+Pipeline --> Estimator : infer(frame)
+Estimator --> Landmarks : estimate
+Landmarks --> Interpreter : landmarks + confidence
+Interpreter --> Features : derive speeds / sway
+Interpreter --> State : classify movement
+Config --> Pipeline : camera / thresholds / ports
+Privacy ..> Pipeline : no raw-frame persistence\nor transmission
+
+Pipeline --> Recovery : tracking lost?
+Recovery --> State : reset / TrackingLost
+Recovery --> Features : neutral values
+
+State --> WSPublisher : semantic state
+WSPublisher --> WSBoundary : JSON over WebSocket
+WSBoundary --> Browser : state updates
+Features --> OSCPublisher : numeric features
+Landmarks --> OSCPublisher : normalized points
+OSCPublisher --> OSCBoundary : OSC messages
+OSCBoundary --> Projection : UDP / port 12000
+
+note bottom of Interpreter
+  One interpretation pipeline.
+  Renderers must not duplicate pose
+  estimation or semantic interpretation.
+end note
+
+note bottom of Recovery
+  Missing landmark: (-1, -1)
+  Lost tracking: reset motion values
+  and publish a safe neutral/lost state.
+end note
+
+note bottom of Privacy
+  Raw video is transient and local.
+  Only derived numeric / semantic data
+  crosses WebSocket or OSC boundaries.
+end note
+@enduml

@@ -67,5 +67,6 @@ python server.py
 
 - [Ontology JSON](ontology/mppdp5-ontology.json): entities, relations, vocabularies, and architectural invariants
 - [PlantUML ecosystem diagram](docs/ontology-ecosystem.puml): camera → OpenCV → MediaPipe Pose → Python interpretation → WebSocket/OSC → p5.js/Processing renderers
+- [PlantUML robustness diagram](docs/robustness-diagram.puml): Boundary / Control / Entity, data flow, tracking-loss recovery, and privacy boundaries
 
 The ontology is an architecture proposal based on this README. Confirm exact field names and behavior against implementation before treating all entries as implemented.

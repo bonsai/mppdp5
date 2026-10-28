@@ -148,44 +148,53 @@ void makePaper() {
 }
 
 void draw() {
+  // Paint first, before any animation, database, or pose code can fail.
+  // A failure later in this frame must not leave a black window.
+  background(250, 248, 242);
   frameIdx++;
-  
-  if (doBoil && frameIdx % boilInterval == 0) {
-    for (int i = 0; i < numLandmarks; i++) {
-      for (int p = 0; p < 4; p++) {
-        jitterX[i][p] = lerp(jitterX[i][p], randomGaussian() * wobbleAmp * 2.0, 0.85);
-        jitterY[i][p] = lerp(jitterY[i][p], randomGaussian() * wobbleAmp * 2.0, 0.85);
+
+  try {
+    if (paper != null) {
+      image(paper, 0, 0);
+    }
+
+    if (doBoil && frameIdx % max(1, boilInterval) == 0) {
+      for (int i = 0; i < numLandmarks; i++) {
+        for (int p = 0; p < 4; p++) {
+          jitterX[i][p] = lerp(jitterX[i][p], randomGaussian() * wobbleAmp * 2.0, 0.85);
+          jitterY[i][p] = lerp(jitterY[i][p], randomGaussian() * wobbleAmp * 2.0, 0.85);
+        }
       }
     }
-  }
-  
-  // Always paint a visible fallback first. If paper texture creation fails,
-  // the sketch should still show a light canvas and diagnostic HUD instead of black.
-  background(250, 248, 242);
-  if (paper != null) {
-    image(paper, 0, 0);
-  }
-  
-  if (dbEnabled && dbConn != null && sessionId > 0 && frameIdx % 30 == 0) {
-    try {
-      PreparedStatement pstmt = dbConn.prepareStatement(
-        "INSERT INTO frames(session_id, frame_idx, has_pose) VALUES(?, ?, ?)"
-      );
-      pstmt.setInt(1, sessionId);
-      pstmt.setInt(2, frameIdx);
-      pstmt.setInt(3, hasPose ? 1 : 0);
-      pstmt.executeUpdate();
-      pstmt.close();
-    } catch (Exception e) {
+
+    if (dbEnabled && dbConn != null && sessionId > 0 && frameIdx % 30 == 0) {
+      try {
+        PreparedStatement pstmt = dbConn.prepareStatement(
+          "INSERT INTO frames(session_id, frame_idx, has_pose) VALUES(?, ?, ?)"
+        );
+        pstmt.setInt(1, sessionId);
+        pstmt.setInt(2, frameIdx);
+        pstmt.setInt(3, hasPose ? 1 : 0);
+        pstmt.executeUpdate();
+        pstmt.close();
+      } catch (Exception e) {
+        println("[DB FRAME ERROR] " + e.getMessage());
+      }
     }
+
+    // OSC reception is independent of drawing; only render after valid pose data.
+    if (hasPose) {
+      drawMangaPose();
+    }
+  } catch (RuntimeException e) {
+    println("[DRAW ERROR] " + e.getClass().getSimpleName() + ": " + e.getMessage());
+    fill(180, 0, 0);
+    textSize(14);
+    textAlign(LEFT, TOP);
+    text("DRAW ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage(), 12, 56);
   }
-  
-  // Do not draw the default (0.5, 0.5) landmark placeholders before
-  // the first OSC pose arrives; those placeholders look like a black blob.
-  if (hasPose) {
-    drawMangaPose();
-  }
-  
+
+  // Keep diagnostics outside the guarded rendering path.
   drawHud();
 }
 

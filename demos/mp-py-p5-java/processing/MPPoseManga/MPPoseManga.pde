@@ -159,7 +159,12 @@ void draw() {
     }
   }
   
-  image(paper, 0, 0);
+  // Always paint a visible fallback first. If paper texture creation fails,
+  // the sketch should still show a light canvas and diagnostic HUD instead of black.
+  background(250, 248, 242);
+  if (paper != null) {
+    image(paper, 0, 0);
+  }
   
   if (dbEnabled && dbConn != null && sessionId > 0 && frameIdx % 30 == 0) {
     try {
@@ -175,7 +180,11 @@ void draw() {
     }
   }
   
-  drawMangaPose();
+  // Do not draw the default (0.5, 0.5) landmark placeholders before
+  // the first OSC pose arrives; those placeholders look like a black blob.
+  if (hasPose) {
+    drawMangaPose();
+  }
   
   drawHud();
 }
@@ -230,19 +239,20 @@ PVector toScreen(int i) {
 }
 
 void drawHud() {
-  fill(200, 0, 0);
+  fill(160, 20, 20);
   textSize(14);
   textAlign(LEFT, BOTTOM);
-  text("hasPose: " + hasPose + " | OSC:127.0.0.1:9000", 12, height - 12);
-  fill(40);
-  textSize(14);
+  text("hasPose: " + hasPose + " | OSC listen: 127.0.0.1:9000", 12, height - 12);
+  fill(30);
+  textSize(16);
   textAlign(LEFT, TOP);
   String hud = "mp-py -> p5-java | ";
   hud += "boil:" + (doBoil?"ON":"OFF") + " ";
   hud += "wobble:" + nf(wobbleAmp, 0, 1) + " ";
   hud += "fps:" + nf(frameRate, 0, 0);
   text(hud, 12, 10);
-  text("keys: b toggle | r reseed | s save", 12, 30);
+  text(hasPose ? "Pose received | keys: b toggle, r reseed, s save" :
+       "Waiting for OSC pose data... Start mp_osc_sender.py", 12, 32);
 }
 
 void oscEvent(OscMessage msg) {

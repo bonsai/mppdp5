@@ -42,9 +42,14 @@ void setup() {
   frameRate(60);
   smooth(8);
   
+  println("[SETUP] MPPoseManga starting; canvas=1280x720");
+  println("[SETUP] Diagnostic mode: plain background first, OSC port 9000");
+
   oscP5 = new OscP5(this, 9000);
-  
-  initDB();
+
+  // Temporarily keep database initialization out of the rendering diagnosis.
+  // DB initialization is optional for the visual demo.
+  dbEnabled = false;
   
   for (int i = 0; i < numLandmarks; i++) {
     lm[i] = new PVector(0.5, 0.5);
@@ -55,7 +60,10 @@ void setup() {
     }
   }
   
-  makePaper();
+  // Skip per-pixel paper texture generation while diagnosing black output.
+  // The plain background below should render even if texture creation is faulty.
+  paper = null;
+  println("[SETUP] complete; draw() should now render a light canvas");
 }
 
 void initDB() {
@@ -150,7 +158,16 @@ void makePaper() {
 void draw() {
   // Paint first, before any animation, database, or pose code can fail.
   // A failure later in this frame must not leave a black window.
-  background(250, 248, 242);
+  // Diagnostic canvas: intentionally high-contrast and independent of assets.
+  background(245, 245, 235);
+  fill(180, 0, 180);
+  textSize(22);
+  textAlign(LEFT, TOP);
+  text("RENDER OK | frame " + frameCount, 16, 16);
+  if (frameCount % 120 == 0) {
+    println("[DRAW HEARTBEAT] frame=" + frameCount + " fps=" + nf(frameRate, 0, 1));
+  }
+
   frameIdx++;
 
   try {

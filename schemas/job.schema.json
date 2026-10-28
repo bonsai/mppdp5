@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Video2Storyboard Job Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "execution_target",
+    "input",
+    "config",
+    "requested_workers",
+    "outputs",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "job_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_target": {
+      "enum": [
+        "local",
+        "colab"
+      ]
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "frame_interval_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "vlm_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "whisper_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "requested_workers": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "ingest_video",
+          "video2png",
+          "eye_pose_mp",
+          "eye_composition_cv2",
+          "eye_meaning_vlm",
+          "ear_stt_whisper",
+          "hand_storyboard_builder",
+          "paper_html_svg",
+          "validate_storyboard"
+        ]
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "artifacts_manifest"
+      ],
+      "properties": {
+        "contract_version": {
+          "const": "1.0"
+        },
+        "artifacts_manifest": {
+          "const": "artifacts.json"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "remote_upload_requires_confirmation",
+        "contains_credentials"
+      ],
+      "properties": {
+        "remote_upload_requires_confirmation": {
+          "const": true
+        },
+        "contains_credentials": {
+          "const": false
+        }
+      }
+    }
+  }
+}

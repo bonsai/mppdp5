@@ -1,0 +1,72 @@
+@startuml java-structure
+!theme plain
+title MPPoseManga.pde Class/Structure Diagram
+
+package "Processing Sketch" {
+  class MPPoseManga {
+    ' Fields
+    +int numLandmarks = 33
+    +PVector[] lm
+    +float[] vis
+    +boolean hasPose = false
+    +boolean doBoil = true
+    +float wobbleAmp = 3.4
+    +int boilInterval = 3
+    +int frameIdx = 0
+    +PGraphics paper
+    +float[][] jitterX[33][4]
+    +float[][] jitterY[33][4]
+    
+    ' DB
+    +Connection dbConn
+    +String dbPath = "data/mppose_manga.db"
+    +boolean dbEnabled = true
+    +int sessionId = -1
+    
+    ' Methods
+    +void setup()
+    +void draw()
+    +void initDB()
+    +void makePaper()
+    +void drawMangaPose()
+    +PVector toScreen(int i)
+    +void drawHud()
+    +void oscEvent(OscMessage msg)
+    +void keyPressed()
+    +void exit()
+  }
+}
+
+package "External Libraries" {
+  class OscP5
+  class NetAddress
+  class DriverManager
+  class Connection
+  class PreparedStatement
+  class ResultSet
+}
+
+package "Processing API" {
+  class PApplet
+  class PVector
+  class PGraphics
+}
+
+MPPoseManga --|> PApplet
+MPPoseManga --> OscP5
+MPPoseManga --> PVector
+MPPoseManga --> PGraphics
+MPPoseManga --> DriverManager
+DriverManager --> Connection
+Connection --> PreparedStatement
+Connection --> ResultSet
+
+note right of MPPoseManga
+  draw() calls drawMangaPose() unconditionally
+  visibility checks removed
+  uses all 33 landmarks & POSE_CONNECTIONS
+  jitter amplified (wobbleAmp * 2.0)
+  stroke weight 2.8-6.0, joints 9px
+end note
+
+@enduml

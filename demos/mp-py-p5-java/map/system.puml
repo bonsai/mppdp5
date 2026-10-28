@@ -1,0 +1,63 @@
+@startuml mp-py-p5-java-system
+!theme plain
+title mp-py + p5-java System Architecture
+
+package "Python (venv .venv / uv)" {
+  [mp_osc_sender.py] as Sender
+  [MediaPipe Pose\n0.10.14] as MP
+}
+
+package "Processing (Java)" {
+  [MPPoseManga.pde] as Sketch
+  [oscP5] as OscP5
+  [SQLite JDBC] as JDBC
+}
+
+package "Data" {
+  database "mppose_manga.db" {
+    [sessions]
+    [screenshots]
+    [frames]
+  }
+  folder "data/screenshots" as Screenshots
+}
+
+package "MCP Servers" {
+  [mppose-manga-sender\nFastMCP] as MCP_Sender
+  [mppose-manga-db\nMCP + sql.js] as MCP_DB
+}
+
+package "OpenCode" {
+  [MCP Client] as OC
+}
+
+[Webcam/Video File] --> Sender
+Sender --> MP
+MP --> Sender
+Sender --> OscP5 : OSC UDP\n/mppose/start\n/mppose/frame\n/mppose/landmark\n/mppose/end
+OscP5 --> Sketch
+Sketch --> [Paper Background\n+ Jitter/Boil]
+Sketch --> JDBC
+JDBC --> "mppose_manga.db"
+Sketch --> Screenshots
+MCP_Sender --> Sender : start/stop/status
+MCP_DB --> "mppose_manga.db" : query
+OC --> MCP_Sender
+OC --> MCP_DB
+
+note right of Sketch
+  - Visibility ignored
+  - Draws all landmarks/connections
+  - Boil jitter (frame % 3)
+  - Stroke weight 2.8-6.0
+  - Joints ellipse 9px
+end note
+
+note right of Sender
+  - Normalized coords (0-1)
+  - x,y,z,visibility
+  - Mirror mode
+  - Preview window
+end note
+
+@enduml

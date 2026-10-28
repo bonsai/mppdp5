@@ -1,0 +1,58 @@
+@startuml manga-pipeline
+title リアルタイム漫画線画パイプライン — 疎結合（契約だけでつなぐ）
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName "Noto Sans CJK JP"
+skinparam ArrowColor #555555
+
+actor "カメラ / 動画ファイル" as SRC
+
+package "検出・解析（Python）" {
+  [キャプチャ\ncv2.VideoCapture] as CAP
+  [線画抽出\nbilateral + Canny + 輪郭] as LINE
+  [重要度付け\n勾配×輪郭長] as IMP
+  [ポーズ検出\nMediaPipe Pose] as POSE
+  [建物セグメンテーション\nMask2Former (ADE20K)\n※重いので N フレームに1回] as BLD
+}
+
+package "描画（差し替え可能）" {
+  [手書きレンダラ\njitter + 重ね描き + トーン\ncv2 / Pillow] as RENDER_PY
+  [Processing スケッチ\noscP5 で受信して描画] as RENDER_P5
+}
+
+package "出力" {
+  [画面表示 / mp4 / PNG] as OUT
+}
+
+database "契約（contracts）" as CONTRACTS {
+}
+
+note right of CONTRACTS
+  受け渡しは契約だけ:
+  ・frame: BGR画像 + frame_idx
+  ・landmarks: 正規化座標 + タイムスタンプ (JSON)
+  ・mask: 建物の二値マスク
+  ・contours: 点列 + 重要度スコア
+  実装同士は import しない
+end note
+
+SRC --> CAP : フレーム
+CAP --> LINE
+CAP --> POSE
+CAP --> BLD
+LINE --> IMP : 輪郭（点列）
+POSE --> CONTRACTS : landmarks
+BLD --> CONTRACTS : mask
+CONTRACTS --> IMP : 建物ブースト
+IMP --> RENDER_PY : contours + 重要度
+CONTRACTS --> RENDER_PY : 骨格レイヤー（常に濃く）
+RENDER_PY --> OUT
+
+CONTRACTS ..> RENDER_P5 : OSC / UDP\n(landmarks + contours)
+note on link
+  検出は Python、描画は Processing
+  という分割も同じ契約で可能
+end note
+
+@enduml

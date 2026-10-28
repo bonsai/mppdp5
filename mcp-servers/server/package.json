@@ -1,0 +1,15 @@
+{
+  "name": "mppdp5-query-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for mppdp5 - query sessions/screenshots/frames/poses from SQLite database",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "sql.js": "^1.12.0",
+    "zod": "^3.24.1"
+  }
+}

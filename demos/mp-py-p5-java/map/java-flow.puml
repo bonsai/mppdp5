@@ -1,0 +1,73 @@
+@startuml java-flow
+!theme plain
+title MPPoseManga.pde Execution Flow
+
+start
+
+:setup();
+:Initialize OscP5 on port 9000;
+:initDB();
+  if (dbEnabled) then (yes)
+    :Create data/ dir;
+    :Load sqlite JDBC;
+    :Create tables (sessions, screenshots, frames);
+    :INSERT INTO sessions;
+    :sessionId = generated key;
+  else (no)
+    :dbEnabled = false;
+  endif
+:Init lm array (0.5,0.5);
+:Init jitterX/Y randomGaussian;
+:makePaper();
+  :Create PGraphics 1280x720;
+  :Fill warm paper color;
+  :Add noise;
+  :Draw ruled lines;
+
+repeat
+  :draw();
+    :frameIdx++;
+    if (boil && frameIdx % 3 == 0) then (yes)
+      :Update jitterX/Y with lerp(randomGaussian * wobbleAmp * 2.0);
+    endif
+    :image(paper, 0, 0);
+    if (db & frameIdx % 30 == 0) then (yes)
+      :INSERT INTO frames(session_id, frame_idx, has_pose);
+    endif
+    :drawMangaPose();
+      :Iterate POSE_CONNECTIONS;
+      :For each connection draw 4 passes with jitter & strokeWeight 2.8-6.0;
+      :Draw joints as ellipses 9px with jitter;
+    :drawHud();
+      :Show hasPose, boil, wobble, fps;
+    
+  :oscEvent(OscMessage);
+    if (/mppose/start) then (yes)
+      :println start (no state change);
+    elseif (/mppose/frame) then (yes)
+      :update frameIdx from message;
+    elseif (/mppose/landmark) then (yes)
+      :set lm[idx] = (x,y,z), vis[idx]=v;
+      if (!hasPose) println first;
+      hasPose = true;
+    elseif (/mppose/end) then (yes)
+      :println end (no state change);
+    endif
+  
+  :keyPressed();
+    if ('b') doBoil = !doBoil
+    if ('r') reseed jitter
+    if ('s') saveFrame + copy to data/screenshots + INSERT screenshots
+    if (ESC) key=0
+
+repeat while (window open)
+
+:exit();
+  if (dbEnabled) then (yes)
+    :UPDATE sessions SET end_time, frame_count WHERE id=sessionId;
+    :close dbConn;
+  endif
+
+stop
+
+@enduml

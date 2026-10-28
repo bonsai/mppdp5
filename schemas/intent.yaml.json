@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://video2storyboard.dev/schemas/intent.yaml.json",
+  "title": "Video2Storyboard Intent",
+  "type": "object",
+  "required": ["version", "intent"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Intent schema version"
+    },
+    "intent": {
+      "type": "object",
+      "required": ["goal"],
+      "properties": {
+        "goal": {
+          "type": "string",
+          "enum": ["manga-4panel", "manga-8panel", "contour-only", "pose-only", "custom"],
+          "description": "High-level processing goal"
+        },
+        "style": {
+          "type": "string",
+          "enum": ["shonen", "shojo", "seinen", "yonkoma", "webtoon", "sketch", "custom"],
+          "default": "shonen",
+          "description": "Manga art style preference"
+        },
+        "input": {
+          "type": "object",
+          "required": ["source"],
+          "properties": {
+            "source": {
+              "type": "string",
+              "description": "Input video/image path or URL"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["video", "image", "camera", "directory"],
+              "default": "video"
+            },
+            "start_time": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Start time in seconds (for video)"
+            },
+            "duration": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Duration in seconds (for video)"
+            }
+          }
+        },
+        "preferences": {
+          "type": "object",
+          "properties": {
+            "realtime": {
+              "type": "boolean",
+              "default": false,
+              "description": "Prefer realtime processing if possible"
+            },
+            "quality": {
+              "type": "string",
+              "enum": ["draft", "balanced", "high", "ultra"],
+              "default": "balanced",
+              "description": "Quality vs speed tradeoff"
+            },
+            "panels": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16,
+              "default: 4,
+              "description": "Number of panels for manga output"
+            },
+            "output_format": {
+              "type": "string",
+              "enum": ["png", "jpg", "webp", "pdf"],
+              "default": "png"
+            },
+            "resolution": {
+              "type": "string",
+              "pattern": "^\\d+x\\d+$",
+              "description": "Output resolution (e.g., 1920x1080)"
+            }
+          }
+        },
+        "providers": {
+          "type": "object",
+          "description": "Explicit provider preferences (override router decisions)",
+          "properties": {
+            "contour": { "type": "string" },
+            "segment": { "type": "string" },
+            "pose": { "type": "string" },
+            "manga": { "type": "string" },
+            "render": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

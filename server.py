@@ -5,14 +5,16 @@ import math
 import threading
 import time
 from collections import deque
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 import cv2
 import mediapipe as mp
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from pythonosc import udp_client
 
 ROOT = Path(__file__).resolve().parent
@@ -20,9 +22,7 @@ WEB_DIR = ROOT / "web"
 OSC_HOST = "127.0.0.1"
 OSC_PORT = 12000
 
-app = FastAPI(title="mpp5 local pose bridge")
-app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
-
+# ── 共有状態 ──────────────────────────────────────────────
 _lock = threading.Lock()
 _state: dict[str, Any] = {
     "type": "pose",
@@ -36,14 +36,13 @@ _state: dict[str, Any] = {
 }
 _stop = threading.Event()
 
-
+# ── カメラワーカー ────────────────────────────────────────
 def set_state(**values: Any) -> None:
     with _lock:
         _state.update(values, timestamp=time.time())
 
 
 def camera_worker() -> None:
-    """Interpret pose once and publish to both the web and Processing renderers."""
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else 0)
     if not cap.isOpened():
         cap.release()
@@ -132,7 +131,6 @@ def camera_worker() -> None:
                 )
                 crouch = hip_center_y > (shoulder_center_y + knee_center_y) / 2.0 + 0.015
 
-                # OSC contract: 13 filtered landmarks plus the interpreted hip center.
                 points: list[float] = []
                 for landmark_type in landmark_order:
                     point = lm[landmark_type.value]
@@ -184,24 +182,124 @@ def camera_worker() -> None:
         print("Camera released.")
 
 
-@app.on_event("startup")
-def start_camera() -> None:
+# ── 釣り・漫画化 用 モックデータ生成 ──────────────────────
+def generate_fish_catch(pose_state: dict) -> dict:
+    """姿勢から釣果を生成"""
+    if not pose_state.get("detected"):
+        return {"caught": False, "reason": "no_pose"}
+    
+    lean = abs(pose_state.get("lean", 0))
+    arms_spread = pose_state.get("arms_spread", False)
+    crouch = pose_state.get("crouch", False)
+    confidence = pose_state.get("confidence", 0)
+    
+    # 釣り判定ロジック
+    base_chance = 0.3
+    if arms_spread:  # 竿を振る動作
+        base_chance += 0.4
+    if crouch:  # しゃがんで待機
+        base_chance += 0.2
+    if lean > 0.5:  # 大きく傾けてアワセ
+        base_chance += 0.3
+    
+    import random
+    caught = random.random() < min(base_chance * confidence, 0.95)
+    
+    fish_types = ["タイ", "ブリ", "ヒラメ", "マグロ", "カツオ", "サケ", "アジ", "イワシ"]
+    sizes = ["小", "中", "大", "特大"]
+    
+    return {
+        "caught": caught,
+        "fish": random.choice(fish_types) if caught else None,
+        "size": random.choice(sizes) if caught else None,
+        "weight_kg": round(random.uniform(0.5, 50), 1) if caught else None,
+        "pose_confidence": confidence,
+        "action": "cast" if arms_spread else ("hook" if lean > 0.5 else "wait"),
+    }
+
+
+def generate_manga_panels(pose_state: dict, num_panels: int = 4) -> dict:
+    """姿勢から漫画コマを生成"""
+    if not pose_state.get("detected"):
+        return {"panels": [], "reason": "no_pose"}
+    
+    lean = pose_state.get("lean", 0)
+    arms_spread = pose_state.get("arms_spread", False)
+    crouch = pose_state.get("crouch", False)
+    confidence = pose_state.get("confidence", 0)
+    
+    # ポーズに基づくコマ割りテンプレート
+    templates = {
+        "action": ["構え", "溜め", "放出", "決着"],
+        "drama": ["日常", "異変", "決意", "行動"],
+        "comedy": ["平和", "ハプニング", "大慌て", "オチ"],
+    }
+    
+    # ポーズからジャンル判定
+    if arms_spread and lean > 0.3:
+        genre = "action"
+    elif crouch:
+        genre = "drama"
+    else:
+        genre = "comedy"
+    
+    panel_titles = templates[genre]
+    
+    import random
+    panels = []
+    for i, title in enumerate(panel_titles[:num_panels]):
+        panels.append({
+            "index": i + 1,
+            "title": title,
+            "genre": genre,
+            "pose_snapshot": {
+                "lean": lean,
+                "arms_spread": arms_spread,
+                "crouch": crouch,
+            },
+            "suggested_dialogue": f"[{genre}] コマ{i+1}: {title}",
+            "effect_lines": random.randint(3, 8),
+        })
+    
+    return {
+        "genre": genre,
+        "panels": panels,
+        "total_panels": len(panels),
+        "source_confidence": confidence,
+    }
+
+
+# ── ライフサイクル ────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     _stop.clear()
     threading.Thread(target=camera_worker, name="mpp5-camera", daemon=True).start()
-
-
-@app.on_event("shutdown")
-def stop_camera() -> None:
+    yield
     _stop.set()
 
 
+# ── FastAPI アプリ ────────────────────────────────────────
+app = FastAPI(title="mpp5 - Pose Bridge + Fishing + Manga", lifespan=lifespan)
+app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
+
+
+# ── ルート定義 ────────────────────────────────────────────
+
 @app.get("/")
-def index() -> FileResponse:
+async def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/api/state")
+async def get_state() -> JSONResponse:
+    """現在の姿勢状態を取得（ポーリング用）"""
+    with _lock:
+        return JSONResponse(dict(_state))
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
+    """リアルタイム姿勢ストリーム（WebSocket）"""
     await websocket.accept()
     try:
         while True:
@@ -213,9 +311,120 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         return
 
 
+# ── 釣りルート ────────────────────────────────────────────
+
+class FishRequest(BaseModel):
+    pose_state: dict | None = None
+
+
+@app.post("/api/fishing/cast")
+async def fishing_cast(req: FishRequest) -> JSONResponse:
+    """キャスト（投げる）"""
+    with _lock:
+        current = dict(_state) if req.pose_state is None else req.pose_state
+    result = generate_fish_catch(current)
+    result["action"] = "cast"
+    return JSONResponse(result)
+
+
+@app.post("/api/fishing/hook")
+async def fishing_hook(req: FishRequest) -> JSONResponse:
+    """アワセ（合わせる）"""
+    with _lock:
+        current = dict(_state) if req.pose_state is None else req.pose_state
+    # アワセ時は lean を強制的に大きくする
+    current["lean"] = max(abs(current.get("lean", 0)), 0.7) * (1 if current.get("lean", 0) > 0 else -1)
+    result = generate_fish_catch(current)
+    result["action"] = "hook"
+    return JSONResponse(result)
+
+
+@app.post("/api/fishing/reel")
+async def fishing_reel(req: FishRequest) -> JSONResponse:
+    """リール（巻く）"""
+    with _lock:
+        current = dict(_state) if req.pose_state is None else req.pose_state
+    result = generate_fish_catch(current)
+    result["action"] = "reel"
+    return JSONResponse(result)
+
+
+@app.get("/api/fishing/status")
+async def fishing_status() -> JSONResponse:
+    """釣り状態取得"""
+    with _lock:
+        current = dict(_state)
+    return JSONResponse({
+        "ready": current.get("detected", False),
+        "pose": current,
+    })
+
+
+# ── 漫画化ルート ──────────────────────────────────────────
+
+class MangaRequest(BaseModel):
+    num_panels: int = 4
+    pose_state: dict | None = None
+
+
+@app.post("/api/manga/generate")
+async def manga_generate(req: MangaRequest) -> JSONResponse:
+    """漫画コマ生成"""
+    with _lock:
+        current = dict(_state) if req.pose_state is None else req.pose_state
+    result = generate_manga_panels(current, req.num_panels)
+    return JSONResponse(result)
+
+
+@app.post("/api/manga/panel")
+async def manga_single_panel(
+    panel_index: int,
+    req: MangaRequest
+) -> JSONResponse:
+    """単一コマ生成"""
+    with _lock:
+        current = dict(_state) if req.pose_state is None else req.pose_state
+    result = generate_manga_panels(current, req.num_panels)
+    if 0 <= panel_index < len(result["panels"]):
+        return JSONResponse(result["panels"][panel_index])
+    raise HTTPException(404, "Panel not found")
+
+
+@app.get("/api/manga/templates")
+async def manga_templates() -> JSONResponse:
+    """利用可能なテンプレート一覧"""
+    return JSONResponse({
+        "templates": {
+            "action": ["構え", "溜め", "放出", "決着"],
+            "drama": ["日常", "異変", "決意", "行動"],
+            "comedy": ["平和", "ハプニング", "大慌て", "オチ"],
+            "horror": ["静寂", "予兆", "恐怖", "絶望"],
+            "romance": ["出会い", "ときめき", "すれ違い", "結ばれ"],
+        },
+        "default_panels": 4,
+        "max_panels": 8,
+    })
+
+
+# ── ヘルスチェック ────────────────────────────────────────
+
+@app.get("/health")
+async def health() -> JSONResponse:
+    return JSONResponse({"status": "ok", "camera": _state.get("camera")})
+
+
 if __name__ == "__main__":
     import uvicorn
-
     print("mpp5 web display: http://127.0.0.1:8765")
     print(f"Processing OSC output: {OSC_HOST}:{OSC_PORT}/UDP")
+    print("API endpoints:")
+    print("  GET  /api/state           - 現在の姿勢状態")
+    print("  WS   /ws                  - リアルタイム姿勢ストリーム")
+    print("  POST /api/fishing/cast    - キャスト")
+    print("  POST /api/fishing/hook    - アワセ")
+    print("  POST /api/fishing/reel    - リール")
+    print("  GET  /api/fishing/status  - 釣り状態")
+    print("  POST /api/manga/generate  - 漫画生成")
+    print("  POST /api/manga/panel     - 単一コマ生成")
+    print("  GET  /api/manga/templates - テンプレート一覧")
     uvicorn.run(app, host="127.0.0.1", port=8765, log_level="info")

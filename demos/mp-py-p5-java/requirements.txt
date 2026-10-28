@@ -1,0 +1,8 @@
+# Core dependencies
+opencv-python
+mediapipe
+python-osc
+numpy
+
+# MCP sender (optional)
+mcp[cli]<2.0.0

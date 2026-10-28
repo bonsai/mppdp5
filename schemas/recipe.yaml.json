@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://video2storyboard.dev/schemas/recipe.yaml.json",
+  "title": "Video2Storyboard Recipe",
+  "type": "object",
+  "required": ["version", "pipeline"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Recipe schema version"
+    },
+    "pipeline": {
+      "type": "object",
+      "required": ["id", "input", "stages"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Pipeline identifier (kebab-case)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description"
+        },
+        "input": {
+          "type": "object",
+          "required": ["type", "path"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["video", "image", "camera", "directory", "jsonl"]
+            },
+            "path": {
+              "type": "string",
+              "description": "Input file/directory path"
+            },
+            "options": {
+              "type": "object",
+              "description": "Input-specific options",
+              "properties": {
+                "fps": { "type": "number", "minimum": 1 },
+                "start_time": { "type": "number", "minimum": 0 },
+                "duration": { "type": "number", "minimum": 0 },
+                "frame_step": { "type": "integer", "minimum": 1, "default": 1 }
+              }
+            }
+          }
+        },
+        "stages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/stage" }
+        },
+        "output": {
+          "type": "object",
+          "description": "Global output settings (can be overridden per stage)",
+          "properties": {
+            "dir": { "type": "string", "default": "./output" },
+            "format": { "type": "string", "enum": ["png", "jpg", "webp", "jsonl", "mp4"], "default": "png" },
+            "naming": { "type": "string", "enum": ["frame", "timestamp", "panel"], "default": "frame" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "required": ["id", "enabled", "provider"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": ["contour", "segment", "pose", "manga", "render", "custom"],
+          "description": "Stage type identifier"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "provider": {
+          "type": "string",
+          "description": "Provider implementation key (e.g., mppdp5, opencv-canny, sam, manga-cam)"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["video", "image", "stream", "batch"],
+          "default": "video",
+          "description": "Processing mode"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Stage IDs this stage depends on (for data flow)"
+        },
+        "input": {
+          "type": "object",
+          "description": "Stage-specific input (paths or references to previous stage outputs)",
+          "properties": {
+            "contour": { "type": "string" },
+            "mask": { "type": "string" },
+            "keypoints": { "type": "string" },
+            "video": { "type": "string" },
+            "image": { "type": "string" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "description": "Stage output configuration",
+          "properties": {
+            "dir": { "type": "string" },
+            "format": { "type": "string", "enum": ["jsonl", "png", "jpg", "webp", "mp4", "npy"] },
+            "protocol": { "type": "string", "enum": ["jsonl", "files", "memory", "zmq", "grpc"] },
+            "panel_layout": { "type": "integer", "minimum": 1 },
+            "options": { "type": "object" }
+          }
+        },
+        "config": {
+          "type": "object",
+          "description": "Provider-specific configuration",
+          "additionalProperties": true
+        },
+        "timeout": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Stage timeout in seconds (0 = no timeout)"
+        },
+        "retry": {
+          "type": "object",
+          "properties": {
+            "max_attempts": { "type": "integer", "minimum": 1, "default": 1 },
+            "backoff": { "type": "number", "default": 1.0 }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "mediapipe-py-mcp": {
+      "env": {
+        "MP_OSC_PORT": "12000",
+        "MP_MODEL_PATH": "C:\\Users\\0501JP\\mppdp5\\mediapipe-py-mcp\\models\\pose_landmarker_lite.task",
+        "MP_MEDIA_ROOT": "C:\\Users\\0501JP\\mppdp5\\mediapipe-py-mcp\\media",
+        "MP_OSC_HOST": "127.0.0.1"
+      },
+      "command": "C:\\Users\\0501JP\\mppdp5\\mediapipe-py-mcp\\.venv\\Scripts\\mediapipe-py-mcp.exe",
+      "args": []
+    }
+  }
+}

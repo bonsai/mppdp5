@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "puredata-mcp": {
+      "command": "C:\\Users\\0501JP\\mppdp5\\puredata-mcp\\.venv\\Scripts\\puredata-mcp.exe",
+      "args": [],
+      "env": {
+        "PD_OSC_HOST": "127.0.0.1",
+        "PD_SONG_ROOT": "C:\\Users\\0501JP\\mppdp5\\puredata-mcp\\songs",
+        "PD_OSC_PORT": "9000"
+      }
+    }
+  }
+}

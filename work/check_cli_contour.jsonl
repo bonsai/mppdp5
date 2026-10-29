@@ -1,0 +1,2 @@
+{"stage_id": "contour", "frame_index": 0, "timestamp": 0.0, "success": false, "points": [], "connections": null, "image_width": 320, "image_height": 240, "image_path": null, "metadata": {"fps": 15.0, "total_frames": 30}}
+{"stage_id": "contour", "frame_index": 1, "timestamp": 0.06666666666666667, "success": false, "points": [], "connections": null, "image_width": 320, "image_height": 240, "image_path": null, "metadata": {"fps": 15.0, "total_frames": 30}}

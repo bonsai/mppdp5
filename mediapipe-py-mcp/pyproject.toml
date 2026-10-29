@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mediapipe-py-mcp"
+version = "0.1.0"
+description = "Local MCP server for MediaPipe Pose analysis of images and camera frames"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.2.0,<2",
+  "mediapipe>=1.1.0,<2.0",
+  "opencv-python>=4.10,<5.0",
+  "python-osc>=1.9,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+mediapipe-py-mcp = "mediapipe_py_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mediapipe_py_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

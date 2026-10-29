@@ -1,0 +1,21 @@
+{
+  "name": "port-manager-mcp",
+  "version": "1.0.2-fork.1",
+  "private": true,
+  "type": "module",
+  "description": "Port management MCP server (local fork) — check / find / kill ports, plus a network system view",
+  "main": "./index.js",
+  "bin": {
+    "port-manager-mcp": "index.js"
+  },
+  "files": [
+    "index.js"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "zod": "^3.25.0"
+  }
+}

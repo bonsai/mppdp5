@@ -1,0 +1,13 @@
+MediaPipe Pipeline (mppdp5) Status
+---
+Project: mppdp5
+Path: C:\Users\0501JP\.config\opencode\skills\mppdp5
+Server Port: 8766
+OSC Port: 9000
+Migration Status: COMPLETE
+Adapter Status:
+  - pose.py: Tasks API (PoseLandmarker) OK
+  - contour.py: Tasks API OK
+  - segment.py: Tasks API (ImageSegmenter) OK
+Test Results: 47 passed / 2 skipped / 0 failed
+Commit: 62d6db0

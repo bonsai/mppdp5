@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mppdp5 Web Fishing - MediaPipe JS + p5.js</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0a1a2f;
+      color: #e8f4fd;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 12px 20px;
+      background: #061e35;
+      border-bottom: 1px solid #1a3a5c;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    h1 { font-size: clamp(1rem, 2.5vw, 1.5rem); letter-spacing: 0.04em; }
+    #status {
+      font-size: 0.85rem;
+      color: #9bd9e8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #ffb15c;
+      animation: pulse 1.5s infinite;
+    }
+    .dot.ok { background: #65f2bf; animation: none; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    
+    main { flex: 1; position: relative; min-height: 0; }
+    #canvas-container { width: 100%; height: 100%; position: relative; }
+    canvas { display: block; width: 100% !important; height: 100% !important; }
+    
+    #video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; }
+    
+    footer {
+      padding: 10px 20px;
+      background: #061e35;
+      border-top: 1px solid #1a3a5c;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 20px;
+      font-size: 0.8rem;
+      color: #c0e5ef;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px 20px;
+      background: rgba(6, 30, 53, 0.9);
+      backdrop-filter: blur(10px);
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #1a3a5c;
+      color: #e8f4fd;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover { background: #2a4a6c; transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button.primary { background: #0066cc; }
+    button.primary:hover { background: #0077ee; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .hud-item {
+      background: rgba(0, 20, 40, 0.85);
+      padding: 8px 14px;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      border: 1px solid #1a3a5c;
+      font-size: 0.9rem;
+      min-width: 200px;
+    }
+    .hud-label { color: #9bd9e8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .hud-value { color: #65f2bf; font-weight: bold; font-size: 1.2rem; }
+    
+    #caught-modal {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      flex-direction: column;
+      gap: 20px;
+    }
+    #caught-modal.show { display: flex; }
+    .modal-content {
+      text-align: center;
+      animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .fish-name { font-size: 2.5rem; color: #ffd700; text-shadow: 0 0 20px #ffd700; }
+    .fish-size { font-size: 1.5rem; color: #9bd9e8; }
+    .fish-weight { font-size: 1.2rem; color: #c0e5ef; }
+    
+    .pose-debug {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 200px;
+      height: 200px;
+      background: rgba(0, 20, 40, 0.8);
+      border-radius: 8px;
+      border: 1px solid #1a3a5c;
+      overflow: hidden;
+    }
+    .pose-debug canvas { width: 100% !important; height: 100% !important; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🎣 mppdp5 Web Fishing</h1>
+  <div id="status"><span class="dot" id="statusDot"></span> <span id="statusText">初期化中…</span></div>
+</header>
+
+<main>
+  <div id="canvas-container">
+    <video id="video" playsinline muted></video>
+    <canvas id="gameCanvas"></canvas>
+  </div>
+  
+  <div id="hud">
+    <div class="hud-item">
+      <div class="hud-label">魚影距離</div>
+      <div class="hud-value" id="distance">--- m</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">竿の角度</div>
+      <div class="hud-value" id="rodAngle">---°</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">リール速度</div>
+      <div class="hud-value" id="reelSpeed">0.0 m/s</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">釣果</div>
+      <div class="hud-value" id="catchCount">0 匹</div>
+    </div>
+  </div>
+  
+  <div class="pose-debug">
+    <canvas id="poseDebug"></canvas>
+  </div>
+</main>
+
+<footer>
+  <span>← → / A D : 竿操作</span>
+  <span>スペース / W : キャスト/アワセ</span>
+  <span>S / ↓ : リール巻き</span>
+  <span>R : リセット</span>
+</footer>
+
+<div class="controls">
+  <button id="startBtn" class="primary">🎥 カメラ開始</button>
+  <button id="castBtn" disabled>🎣 キャスト</button>
+  <button id="hookBtn" disabled>⚡ アワセ</button>
+  <button id="reelBtn" disabled>🔄 巻く</button>
+  <button id="resetBtn">🔁 リセット</button>
+</div>
+
+<div id="caught-modal">
+  <div class="modal-content">
+    <div class="fish-name" id="caughtName">---</div>
+    <div class="fish-size" id="caughtSize">---</div>
+    <div class="fish-weight" id="caughtWeight">---</div>
+    <button onclick="closeCaughtModal()" class="primary" style="font-size: 1.2rem; padding: 12px 32px;">続ける</button>
+  </div>
+</div>
+
+<!-- MediaPipe Pose -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
+<!-- p5.js -->
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+<!-- Game Logic -->
+<script src="fishing.js"></script>
+</body>
+</html>

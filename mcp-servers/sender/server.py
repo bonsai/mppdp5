@@ -14,6 +14,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -45,7 +46,17 @@ def _run_cli(stage: str, args: list[str]) -> subprocess.Popen:
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0,
     )
+    # Start log pump thread to drain stdout
+    st = _state.get(stage)
+    if st is not None and proc.stdout is not None:
+        def _pump():
+            for line in proc.stdout:
+                st["logs"].append(line.strip())
+        t = threading.Thread(target=_pump, daemon=True)
+        t.start()
+        st["pump_thread"] = t
     return proc
 
 
@@ -253,9 +264,7 @@ def stop_process(stage: str = "all") -> str:
             
         try:
             proc = st["process"]
-            if os.name == "nt":
-                proc.send_signal(signal.CTRL_BREAK_EVENT)
-                time.sleep(0.5)
+            # Use terminate() as primary, sends SIGTERM (or Windows equivalent)
             proc.terminate()
             try:
                 proc.wait(timeout=3)

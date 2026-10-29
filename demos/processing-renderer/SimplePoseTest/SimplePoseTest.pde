@@ -16,11 +16,8 @@ PVector[] lm = new PVector[numLandmarks];
 float[] vis = new float[numLandmarks];
 boolean hasPose = false;
 
-void settings() {
-  size(1280, 720, JAVA2D);
-}
-
 void setup() {
+    size(1280, 720, JAVA2D);
   frameRate(60);
   smooth(4);
   

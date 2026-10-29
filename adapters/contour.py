@@ -12,11 +12,16 @@ from __future__ import annotations
 import asyncio
 import base64
 import cv2
-import mediapipe as mp
 import numpy as np
 from pathlib import Path
 from typing import AsyncIterator, Optional, List, Tuple
 from dataclasses import dataclass
+
+from .base import BaseAdapter, AdapterConfig, StageOutput, ContourOutput
+import mediapipe as mp
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.core.base_options import BaseOptions
+from mediapipe.tasks.python.vision import PoseLandmarkerOptions, RunningMode
 
 from .base import (
     BaseAdapter, AdapterConfig, StageOutput, ContourOutput, 
@@ -56,42 +61,48 @@ class ContourAdapter(BaseAdapter):
             return
         
         if cfg.contour_mode in ("landmarks", "both"):
-            self._pose = mp.solutions.pose.Pose(
-                static_image_mode=(cfg.mode == "image"),
-                model_complexity=cfg.model_complexity,
-                smooth_landmarks=cfg.smooth_landmarks,
-                enable_segmentation=cfg.enable_segmentation,
-                min_detection_confidence=cfg.min_detection_confidence,
-                min_tracking_confidence=cfg.min_tracking_confidence,
+            self._pose = vision.PoseLandmarker.create_from_options(
+                PoseLandmarkerOptions(
+                    base_options=BaseOptions(
+                        model_asset_path=str(Path(__file__).parent.parent / "models" / "pose_landmarker_lite.task"),
+                        delegate=BaseOptions.Delegate.CPU,
+                    ),
+                    running_mode=RunningMode.IMAGE if cfg.mode == "image" else RunningMode.VIDEO,
+                    min_pose_detection_confidence=cfg.min_detection_confidence,
+                    min_pose_presence_confidence=cfg.min_tracking_confidence,
+                    min_tracking_confidence=cfg.min_tracking_confidence,
+                    output_segmentation_masks=False,
+                )
             )
         else:
             self._pose = None
     
     def _extract_landmark_contours(
         self, 
-        landmarks: mp.solutions.pose.PoseLandmark, 
+        results: vision.PoseLandmarkerResult, 
         width: int, 
         height: int,
         visibility_threshold: float = 0.35
     ) -> Tuple[List[List[float]], List[List[int]]]:
-        """Extract contour lines from MediaPipe landmarks."""
+        """Extract contour lines from MediaPipe pose landmarks."""
+        lm = results.pose_landmarks[0]  # First detected person
+        
+        # Map landmark indices
+        lm_to_idx = {}
         points = []
-        connections = []
         point_idx = 0
         
-        # Map landmark index to point index in our output
-        lm_to_idx = {}
-        
-        for i, lm in enumerate(landmarks.landmark):
-            if lm.visibility >= visibility_threshold:
+        for i, point in enumerate(lm):
+            if point.visibility >= visibility_threshold:
                 # Normalize to 0-1
-                points.append([lm.x, lm.y])
+                points.append([point.x, point.y])
                 lm_to_idx[i] = point_idx
                 point_idx += 1
             else:
                 lm_to_idx[i] = -1
         
         # Build connections using visible landmarks only
+        connections = []
         for start, end in BODY_CONTOUR_CONNECTIONS:
             if start in lm_to_idx and end in lm_to_idx:
                 si, ei = lm_to_idx[start], lm_to_idx[end]
@@ -217,11 +228,11 @@ class ContourAdapter(BaseAdapter):
                 # Landmark-based contours
                 if config.contour_mode in ("landmarks", "both") and self._pose:
                     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    results = self._pose.process(rgb)
+                    results = self._pose.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), 0)
                     
                     if results.pose_landmarks:
                         points, connections = self._extract_landmark_contours(
-                            results.pose_landmarks, width, height
+                            results.pose_landmarks[0], width, height
                         )
                         all_points.extend(points)
                         if connections:
@@ -285,11 +296,11 @@ class ContourAdapter(BaseAdapter):
         
         if config.contour_mode in ("landmarks", "both") and self._pose:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = self._pose.process(rgb)
+            results = self._pose.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), 0)
             
             if results.pose_landmarks:
                 points, connections = self._extract_landmark_contours(
-                    results.pose_landmarks, width, height
+                    results.pose_landmarks[0], width, height
                 )
                 all_points.extend(points)
                 if connections:
@@ -356,11 +367,11 @@ class ContourAdapter(BaseAdapter):
                 
                 if config.contour_mode in ("landmarks", "both") and self._pose:
                     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    results = self._pose.process(rgb)
+                    results = self._pose.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), 0)
                     
                     if results.pose_landmarks:
                         points, connections = self._extract_landmark_contours(
-                            results.pose_landmarks, width, height
+                            results.pose_landmarks[0], width, height
                         )
                         all_points.extend(points)
                         if connections:

@@ -20,7 +20,7 @@ from pythonosc import udp_client
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 OSC_HOST = "127.0.0.1"
-OSC_PORT = 12000
+OSC_PORT = 9000
 
 # ── 共有状態 ──────────────────────────────────────────────
 _lock = threading.Lock()
@@ -65,21 +65,39 @@ def camera_worker() -> None:
     hip_x_history: deque[float] = deque(maxlen=20)
 
     try:
-        pose_api = mp.solutions.pose
-        P = pose_api.PoseLandmark
-        landmark_order = [
-            P.NOSE, P.LEFT_SHOULDER, P.RIGHT_SHOULDER, P.LEFT_ELBOW,
-            P.RIGHT_ELBOW, P.LEFT_WRIST, P.RIGHT_WRIST, P.LEFT_HIP,
-            P.RIGHT_HIP, P.LEFT_KNEE, P.RIGHT_KNEE, P.LEFT_ANKLE, P.RIGHT_ANKLE,
-        ]
-        with pose_api.Pose(
-            static_image_mode=False,
-            model_complexity=0,
-            smooth_landmarks=True,
-            enable_segmentation=False,
-            min_detection_confidence=0.5,
+        from mediapipe.tasks.python import vision
+        from mediapipe.tasks.python.core.base_options import BaseOptions
+        from mediapipe.tasks.python.vision import PoseLandmarkerOptions, RunningMode
+        import mediapipe as mp
+
+        base_options = BaseOptions(
+            model_asset_path=str(Path(__file__).parent.parent / "models" / "pose_landmarker_lite.task"),
+            delegate=BaseOptions.Delegate.CPU,
+        )
+        options = PoseLandmarkerOptions(
+            base_options=base_options,
+            running_mode=RunningMode.VIDEO,
+            min_pose_detection_confidence=0.5,
+            min_pose_presence_confidence=0.5,
             min_tracking_confidence=0.5,
-        ) as pose:
+        )
+        pose = vision.PoseLandmarker.create_from_options(options)
+
+        # Landmark index mapping for 14 key points
+        idx_map = {
+            0: 0,   # NOSE
+            11: 11, # LEFT_SHOULDER
+            12: 12, # RIGHT_SHOULDER
+            13: 13, # LEFT_ELBOW
+            14: 14, # RIGHT_ELBOW
+            15: 15, # LEFT_WRIST
+            16: 16, # RIGHT_WRIST
+            23: 23, # LEFT_HIP
+            24: 24, # RIGHT_HIP
+            25: 25, # LEFT_KNEE
+            26: 26, # RIGHT_KNEE
+        }
+        with pose:
             while not _stop.is_set():
                 ok, frame = cap.read()
                 if not ok:
@@ -279,8 +297,9 @@ async def lifespan(app: FastAPI):
 
 
 # ── FastAPI アプリ ────────────────────────────────────────
-app = FastAPI(title="mpp5 - Pose Bridge + Fishing + Manga", lifespan=lifespan)
+app = FastAPI(title="mpp5 - Pose Bridge + Fishing + Manga + MMX", lifespan=lifespan)
 app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
+app.mount("/models", StaticFiles(directory=ROOT / "models"), name="models")
 
 
 # ── ルート定義 ────────────────────────────────────────────
@@ -288,6 +307,10 @@ app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
+
+@app.get("/mmx")
+async def mmx_viewer() -> FileResponse:
+    return FileResponse(WEB_DIR / "mmx.html")
 
 
 @app.get("/api/state")

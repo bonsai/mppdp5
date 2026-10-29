@@ -2,7 +2,7 @@
 Segment Adapter - Extracts segmentation masks from video frames.
 
 Supports:
-- MediaPipe Selfie Segmentation (fast, real-time)
+- MediaPipe Tasks ImageSegmenter (Selfie Segmentation)
 - SAM (Segment Anything Model) - high quality, slower
 - Future: Robust Video Matting (RVM) for video matting
 
@@ -18,6 +18,10 @@ import numpy as np
 from pathlib import Path
 from typing import AsyncIterator, List, Optional
 from dataclasses import dataclass
+
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.core.base_options import BaseOptions
+from mediapipe.tasks.python.vision import ImageSegmenterOptions, RunningMode
 
 from .base import BaseAdapter, AdapterConfig, StageOutput, SegmentOutput
 
@@ -41,8 +45,16 @@ class SegmentAdapter(BaseAdapter):
         self._segmentation_model = cfg.segmentation_model
         
         if self._segmentation_model == "mediapipe":
-            self._seg = mp.solutions.selfie_segmentation.SelfieSegmentation(
-                model_selection=1  # 0=general, 1=landscape (better for full body)
+            seg_model_path = str(Path(__file__).parent.parent / "models" / "selfie_segmenter.tflite")
+            self._seg = vision.ImageSegmenter.create_from_options(
+                ImageSegmenterOptions(
+                    base_options=BaseOptions(
+                        model_asset_path=seg_model_path,
+                        delegate=BaseOptions.Delegate.CPU,
+                    ),
+                    running_mode=RunningMode.VIDEO,
+                    output_category_mask=True,
+                )
             )
         elif self._segmentation_model == "sam":
             # Lazy import SAM only when needed
@@ -95,13 +107,14 @@ class SegmentAdapter(BaseAdapter):
         except ImportError:
             raise RuntimeError("segment-anything not installed. Run: pip install segment-anything")
     
-    def _get_mediapipe_mask(self, frame: np.ndarray) -> np.ndarray:
-        """Get binary mask from MediaPipe Selfie Segmentation."""
+    def _get_mediapipe_mask(self, frame: np.ndarray, width: int, height: int, timestamp_ms: int = 0) -> np.ndarray:
+        """Get binary mask from MediaPipe Tasks ImageSegmenter."""
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self._seg.process(rgb)
-        mask = results.segmentation_mask
-        # Threshold to binary
-        binary_mask = (mask > 0.5).astype(np.uint8) * 255
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        results = self._seg.segment_for_video(mp_image, timestamp_ms)
+        mask = results.category_mask.numpy_view()
+        # Threshold to binary (1 = person)
+        binary_mask = (mask > 0).astype(np.uint8) * 255
         return binary_mask
     
     def _get_sam_mask(self, frame: np.ndarray, prompts: Optional[dict] = None) -> np.ndarray:
@@ -212,30 +225,32 @@ class SegmentAdapter(BaseAdapter):
                 
                 # Get mask
                 if self._segmentation_model == "mediapipe":
-                    mask = self._get_mediapipe_mask(frame)
+                    mask = self._get_mediapipe_mask(frame, width, height, int(frame_idx * 1000 / fps if fps > 0 else int(frame_idx * 1000 / 30)))
                 elif self._segmentation_model == "sam":
                     mask = self._get_sam_mask(frame)
                 else:
                     mask = np.zeros((height, width), dtype=np.uint8)
                 
-                # Save mask
+                # Save mask PNGs when output_path ends with .png or protocol is files
                 mask_path = None
                 overlay_path = None
                 mask_data = None
-                
-                if config.protocol == "files":
+                save_mask_png = output_path.endswith(".png") or config.protocol == "files"
+                if save_mask_png:
+                    output_dir = Path(output_path).parent
+                    output_dir.mkdir(parents=True, exist_ok=True)
                     mask_path = str(output_dir / f"mask_{frame_idx:06d}.{config.mask_output_format}")
                     if config.mask_output_format == "png":
                         cv2.imwrite(mask_path, mask)
                     elif config.mask_output_format == "npy":
                         np.save(mask_path.replace(".npy", ""), mask)
-                    
+
                     # Also save overlay
                     if config.output_format in ("png", "jpg"):
                         overlay_path = str(output_dir / f"overlay_{frame_idx:06d}.{config.output_format}")
                         overlay = self._render_overlay(frame, mask)
                         cv2.imwrite(overlay_path, overlay)
-                
+
                 elif config.protocol in ("jsonl", "memory"):
                     mask_data = self._encode_mask(mask, "base64")
                 
@@ -275,7 +290,7 @@ class SegmentAdapter(BaseAdapter):
         height, width = frame.shape[:2]
         
         if self._segmentation_model == "mediapipe":
-            mask = self._get_mediapipe_mask(frame)
+            mask = self._get_mediapipe_mask(frame, width, height, int(frame_idx * 1000 / fps if fps > 0 else int(frame_idx * 1000 / 30)))
         elif self._segmentation_model == "sam":
             mask = self._get_sam_mask(frame)
         else:
@@ -342,7 +357,7 @@ class SegmentAdapter(BaseAdapter):
                 timestamp = frame_idx * (1/30)
                 
                 if self._segmentation_model == "mediapipe":
-                    mask = self._get_mediapipe_mask(frame)
+                    mask = self._get_mediapipe_mask(frame, width, height, int(frame_idx * 1000 / fps if fps > 0 else int(frame_idx * 1000 / 30)))
                 elif self._segmentation_model == "sam":
                     mask = self._get_sam_mask(frame)
                 else:
@@ -383,5 +398,6 @@ class SegmentAdapter(BaseAdapter):
     def cleanup(self) -> None:
         if hasattr(self, "_seg") and self._seg:
             self._seg.close()
+            self._seg = None
         if hasattr(self, "_sam_predictor"):
             self._sam_predictor = None

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>mpp5 — Web Manga (MediaPipe JS + p5.js)</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0a0a0a; color: #eaeaea; overflow: hidden; }
+    #app { min-height: 100svh; display: flex; flex-direction: column; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:12px 18px; background:#111; border-bottom:1px solid #222; }
+    h1 { margin:0; font-size:clamp(1rem,2.4vw,1.4rem); letter-spacing:.04em; }
+    #status { font-size:.88rem; color:#aaa; text-align:right; }
+    main { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px; }
+    #canvas-holder { width:min(100%, 1280px); position: relative; }
+    #canvas-holder canvas { display:block; width:100%!important; height:auto!important; border-radius:12px; box-shadow:0 12px 44px #000a; }
+    footer { display:flex; flex-wrap:wrap; justify-content:center; gap:8px 20px; padding:10px; color:#888; font-size:.85rem; background:#111; border-top:1px solid #222; }
+    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#ffb15c; margin-right:6px; }
+    .dot.ok { background:#65f2bf; }
+    select, button { background:#1a1a1a; color:#eee; border:1px solid #333; padding:6px 12px; border-radius:6px; font-size:.9rem; }
+    select:focus, button:focus { outline:none; border-color:#65f2bf; }
+    button:hover { background:#222; cursor:pointer; }
+    .controls { display:flex; gap:8px; align-items:center; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🎨 mpp5 · WEB MANGA</h1>
+    <div id="status"><span class="dot"></span> MediaPipe JS を読み込み中…</div>
+  </header>
+  <main><div id="canvas-holder"></div></main>
+  <footer>
+    <div class="controls">
+      <label>モード:
+        <select id="modeSelect">
+          <option value="manga">漫画 (Contour + Tone)</option>
+          <option value="contour">輪郭のみ</option>
+          <option value="pose">Pose Landmarks</option>
+          <option value="segment">Selfie Segmentation</option>
+        </select>
+      </label>
+      <label>カメラ:
+        <select id="cameraSelect"></select>
+      </label>
+      <button id="toggleBtn">一時停止</button>
+    </div>
+    <span>📷 ブラウザ完結 · Python不要 · MediaPipe Tasks (Web) + p5.js</span>
+  </footer>
+</div>
+<script type="importmap">
+{
+  "imports": {
+    "p5": "https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js",
+    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22"
+  }
+}
+</script>
+<script type="module" src="./sketch.js"></script>
+</body>
+</html>

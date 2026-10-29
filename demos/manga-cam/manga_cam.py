@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""manga_cam.py — リアルタイム漫画線画カメラ
+"""manga_cam.py — リアルタイム漫画線画カメラ (MediaPipe Tasks API 版)
 
 組み合わせパイプライン（全部コードのみ・古典処理が核）:
   1. 線画: bilateral + Canny の輪郭
   2. 強調: エッジ強さ×輪郭長で「重要な線は濃く、他は薄く」
   3. 手書き調: 輪郭の点列を震わせて薄く重ね描き（ラインボイル制御つき）
-  4. 人物: MediaPipe Pose の骨格を常に濃い別レイヤーで
+  4. 人物: MediaPipe Tasks PoseLandmarker の骨格を常に濃い別レイヤーで
   5. 建物: セグメンテーション（任意・重いので数フレームに1回だけ計算して再利用）
            建物マスクに触れる線は重要度ブースト
   6. トーン: 階調を量子化して紙の下にうっすら敷く
@@ -20,23 +20,26 @@
 """
 import argparse
 import time
+from pathlib import Path
 
 import cv2
+import mediapipe as mp
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.core.base_options import BaseOptions
+from mediapipe.tasks.python.vision import PoseLandmarkerOptions, RunningMode
 import numpy as np
 
 
 # ---------- 手書き調: 輪郭を震わせる ----------
 def jitter(points, amp, smooth, rng):
-    n = len(points)
-    dx = rng.normal(0, amp, n)
-    dy = rng.normal(0, amp, n)
+    pts = np.asarray(points, dtype=np.float32).reshape(-1, 2)
+    n = len(pts)
     k = cv2.getGaussianKernel(smooth, 0).flatten()
-    dx = np.convolve(dx, k, mode="same")
-    dy = np.convolve(dy, k, mode="same")
-    out = points.astype(np.float32).copy()
-    out[:, 0] += dx
-    out[:, 1] += dy
-    return out.astype(np.int32)
+    dx = np.convolve(rng.normal(0, amp, n), k, mode="same")[:n]
+    dy = np.convolve(rng.normal(0, amp, n), k, mode="same")[:n]
+    pts[:, 0] += dx
+    pts[:, 1] += dy
+    return pts.astype(np.int32)
 
 
 # ---------- 建物セグメンテーション（任意・遅延読み込み・結果を再利用） ----------
@@ -129,8 +132,6 @@ def render(frame, wobble=2.0, frame_idx=0, boil=3,
 
     # 人物の骨格は常に濃く（別レイヤー）
     if pose_layer is not None:
-        overlay = canvas.copy()
-        cv2.addWeighted(pose_layer, 1.0, np.zeros_like(pose_layer), 0, 0, overlay)
         mask = np.any(pose_layer > 0, axis=2)
         canvas[mask] = (30, 30, 30)
     return canvas
@@ -150,15 +151,23 @@ def main():
     if not cap.isOpened():
         raise SystemExit("入力を開けませんでした")
 
-    # MediaPipe Pose（あれば使う）
+    # MediaPipe Tasks PoseLandmarker（あれば使う）
     pose = None
     try:
-        import mediapipe as mp
-        pose = mp.solutions.pose.Pose(
-            static_image_mode=False, model_complexity=1,
-            min_detection_confidence=0.5, min_tracking_confidence=0.5)
-        mp_draw = mp.solutions.drawing_utils
-        mp_pose = mp.solutions.pose
+        model_path = Path(__file__).parent.parent / "models" / "pose_landmarker_lite.task"
+        base_options = BaseOptions(
+            model_asset_path=str(model_path),
+            delegate=BaseOptions.Delegate.CPU,
+        )
+        pose_options = PoseLandmarkerOptions(
+            base_options=base_options,
+            running_mode=RunningMode.VIDEO,
+            min_pose_detection_confidence=0.5,
+            min_pose_presence_confidence=0.5,
+            min_tracking_confidence=0.5,
+            output_segmentation_masks=False,
+        )
+        pose = vision.PoseLandmarker.create_from_options(pose_options)
     except Exception as e:
         print(f"[pose disabled] {e}")
 
@@ -174,6 +183,8 @@ def main():
                                  cv2.VideoWriter_fourcc(*"mp4v"), fps0, (w0, h0))
 
     idx, t_prev, fps_disp = 0, time.time(), 0.0
+    frame_timestamp = 0
+
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -187,13 +198,32 @@ def main():
         # 骨格レイヤー（真っ黒キャンバスに白で描いてマスク化）
         pose_layer = None
         if pose is not None and show_pose:
-            res = pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            if res.pose_landmarks:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            frame_timestamp = int(frame_timestamp + 1000 / 30)  # ~30fps timestamps
+            results = pose.detect_for_video(mp_image, frame_timestamp)
+            if results.pose_landmarks:
+                h_frame, w_frame = frame.shape[:2]
                 pose_layer = np.zeros_like(frame)
-                mp_draw.draw_landmarks(
-                    pose_layer, res.pose_landmarks, mp_pose.POSE_CONNECTIONS,
-                    mp_draw.DrawingSpec(color=(255, 255, 255), thickness=2, circle_radius=2),
-                    mp_draw.DrawingSpec(color=(255, 255, 255), thickness=2, circle_radius=2))
+                lms = results.pose_landmarks[0]
+                # Draw connections
+                connections = [
+                    (11, 12), (11, 13), (13, 15), (15, 17),
+                    (12, 14), (14, 16), (16, 18),
+                    (11, 23), (12, 24), (23, 24),
+                    (23, 25), (25, 27), (24, 26), (26, 28),
+                    (0, 11), (0, 12),
+                ]
+                for start_idx, end_idx in connections:
+                    if start_idx < len(lms) and end_idx < len(lms):
+                        p1 = lms[start_idx]
+                        p2 = lms[end_idx]
+                        if p1.visibility > 0.35 and p2.visibility > 0.35:
+                            x1, y1 = int(p1.x * w_frame), int(p1.y * h_frame)
+                            x2, y2 = int(p2.x * w_frame), int(p2.y * h_frame)
+                            cv2.line(pose_layer, (x1, y1), (x2, y2), (255, 255, 255), 2)
+                            cv2.circle(pose_layer, (x1, y1), 2, (255, 255, 255), -1)
+                            cv2.circle(pose_layer, (x2, y2), 2, (255, 255, 255), -1)
 
         out = render(frame, wobble=args.wobble, frame_idx=idx,
                      pose_layer=pose_layer,
@@ -228,6 +258,8 @@ def main():
     if writer is not None:
         writer.release()
     cv2.destroyAllWindows()
+    if pose:
+        pose.close()
 
 
 if __name__ == "__main__":

@@ -8,11 +8,15 @@ Compatible with existing mppdp5 OSC output format.
 from __future__ import annotations
 import asyncio
 import cv2
-import mediapipe as mp
 import numpy as np
 from pathlib import Path
-from typing import AsyncIterator, List, Optional
+from typing import AsyncIterator, List, Optional, Any
 import math
+
+import mediapipe as mp
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.core.base_options import BaseOptions
+from mediapipe.tasks.python.vision import PoseLandmarkerOptions, RunningMode
 
 from .base import BaseAdapter, AdapterConfig, StageOutput, PoseOutput
 
@@ -83,13 +87,19 @@ class PoseAdapter(BaseAdapter):
         if not cfg:
             return
         
-        self._pose = mp.solutions.pose.Pose(
-            static_image_mode=(cfg.mode == "image"),
-            model_complexity=cfg.model_complexity,
-            smooth_landmarks=cfg.smooth_landmarks,
-            enable_segmentation=cfg.enable_segmentation,
-            min_detection_confidence=cfg.min_detection_confidence,
-            min_tracking_confidence=cfg.min_tracking_confidence,
+        base_options = BaseOptions(
+            model_asset_path=str(Path(__file__).parent.parent / "models" / "pose_landmarker_lite.task"),
+            delegate=BaseOptions.Delegate.CPU,
+        )
+        self._pose = vision.PoseLandmarker.create_from_options(
+            PoseLandmarkerOptions(
+                base_options=base_options,
+                running_mode=RunningMode.VIDEO,
+                min_pose_detection_confidence=cfg.min_detection_confidence,
+                min_pose_presence_confidence=cfg.min_tracking_confidence,
+                min_tracking_confidence=cfg.min_tracking_confidence,
+                output_segmentation_masks=False,
+            )
         )
         
         # For speed calculation
@@ -99,7 +109,7 @@ class PoseAdapter(BaseAdapter):
     
     def _extract_landmarks(
         self, 
-        landmarks: mp.solutions.pose.PoseLandmark, 
+        landmarks: vision.PoseLandmarkerResult, 
         width: int, 
         height: int,
         visibility_threshold: float = 0.35
@@ -109,7 +119,7 @@ class PoseAdapter(BaseAdapter):
         Returns: (landmarks_list, lean, arms_spread, crouch, confidence)
         landmarks_list: 33 * 4 floats [x, y, z, visibility] or [-1, -1, -1, -1]
         """
-        lm = landmarks.landmark
+        lm = landmarks.pose_landmarks[0]  # First detected person
         
         # Build flat landmark array (compatible with OSC format)
         landmarks_flat = []
@@ -157,8 +167,8 @@ class PoseAdapter(BaseAdapter):
     
     def _calculate_speeds(
         self, 
-        left_wrist: mp.solutions.pose.PoseLandmark, 
-        right_wrist: mp.solutions.pose.PoseLandmark,
+        left_wrist: Any, 
+        right_wrist: Any,
         width: int, height: int
     ) -> tuple[float, float]:
         """Calculate wrist speeds."""
@@ -194,12 +204,32 @@ class PoseAdapter(BaseAdapter):
         return 0.0
     
     def _render_pose_image(self, frame: np.ndarray, landmarks) -> np.ndarray:
-        """Render pose landmarks on frame."""
+        """Render pose landmarks on frame using OpenCV."""
         annotated = frame.copy()
-        mp.solutions.drawing_utils.draw_landmarks(
-            annotated, landmarks, mp.solutions.pose.POSE_CONNECTIONS,
-            landmark_drawing_spec=mp.solutions.drawing_styles.get_default_pose_landmarks_style()
-        )
+        # Draw landmarks as circles
+        for lm in landmarks:
+            if lm.visibility > 0.5:
+                x, y = int(lm.x * frame.shape[1]), int(lm.y * frame.shape[0])
+                cv2.circle(annotated, (x, y), 3, (0, 255, 0), -1)
+        # Draw connections
+        connections = [
+            (0, 1), (1, 2), (2, 3), (3, 7),
+            (0, 4), (4, 5), (5, 6), (6, 8),
+            (9, 10),
+            (11, 12), (11, 13), (13, 15), (15, 17), (15, 19), (15, 21),
+            (12, 14), (14, 16), (16, 18), (16, 20), (16, 22),
+            (11, 23), (12, 24), (23, 24),
+            (23, 25), (25, 27), (27, 29), (27, 31),
+            (24, 26), (26, 28), (28, 30), (28, 32),
+        ]
+        for start_idx, end_idx in connections:
+            if start_idx < len(landmarks) and end_idx < len(landmarks):
+                lm1 = landmarks[start_idx]
+                lm2 = landmarks[end_idx]
+                if lm1.visibility > 0.5 and lm2.visibility > 0.5:
+                    x1, y1 = int(lm1.x * frame.shape[1]), int(lm1.y * frame.shape[0])
+                    x2, y2 = int(lm2.x * frame.shape[1]), int(lm2.y * frame.shape[0])
+                    cv2.line(annotated, (x1, y1), (x2, y2), (0, 180, 255), 2)
         return annotated
     
     async def process_video(
@@ -239,7 +269,9 @@ class PoseAdapter(BaseAdapter):
                 timestamp = frame_idx / fps if fps > 0 else frame_idx * (1/30)
                 
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = self._pose.process(rgb)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                timestamp_ms = int(frame_idx * 1000 / fps) if fps > 0 else 0
+                results = self._pose.detect_for_video(mp_image, timestamp_ms)
                 
                 if not results.pose_landmarks:
                     yield PoseOutput(
@@ -256,20 +288,21 @@ class PoseAdapter(BaseAdapter):
                     continue
                 
                 landmarks_flat, lean, arms_spread, crouch, confidence = self._extract_landmarks(
-                    results.pose_landmarks, width, height
+                    results, width, height
                 )
                 
                 # Speeds
+                lms = results.pose_landmarks[0]
                 left_speed, right_speed = self._calculate_speeds(
-                    results.pose_landmarks.landmark[PoseLandmark.LEFT_WRIST],
-                    results.pose_landmarks.landmark[PoseLandmark.RIGHT_WRIST],
+                    lms[PoseLandmark.LEFT_WRIST],
+                    lms[PoseLandmark.RIGHT_WRIST],
                     width, height
                 )
                 
                 # Hip sway
                 hip_sway = self._calculate_hip_sway(
-                    results.pose_landmarks.landmark[PoseLandmark.LEFT_HIP],
-                    results.pose_landmarks.landmark[PoseLandmark.RIGHT_HIP],
+                    lms[PoseLandmark.LEFT_HIP],
+                    lms[PoseLandmark.RIGHT_HIP],
                     width
                 )
                 
@@ -324,7 +357,8 @@ class PoseAdapter(BaseAdapter):
         height, width = frame.shape[:2]
         
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self._pose.process(rgb)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        results = self._pose.detect_for_video(mp_image, 0)
         
         if not results.pose_landmarks:
             return PoseOutput(
@@ -387,7 +421,8 @@ class PoseAdapter(BaseAdapter):
                 timestamp = frame_idx * (1/30)
                 
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = self._pose.process(rgb)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                results = self._pose.detect_for_video(mp_image, int(frame_idx * 1000 / 30))
                 
                 if not results.pose_landmarks:
                     yield PoseOutput(
@@ -408,14 +443,14 @@ class PoseAdapter(BaseAdapter):
                 )
                 
                 left_speed, right_speed = self._calculate_speeds(
-                    results.pose_landmarks.landmark[PoseLandmark.LEFT_WRIST],
-                    results.pose_landmarks.landmark[PoseLandmark.RIGHT_WRIST],
+                    lms[PoseLandmark.LEFT_WRIST],
+                    lms[PoseLandmark.RIGHT_WRIST],
                     width, height
                 )
                 
                 hip_sway = self._calculate_hip_sway(
-                    results.pose_landmarks.landmark[PoseLandmark.LEFT_HIP],
-                    results.pose_landmarks.landmark[PoseLandmark.RIGHT_HIP],
+                    lms[PoseLandmark.LEFT_HIP],
+                    lms[PoseLandmark.RIGHT_HIP],
                     width
                 )
                 

@@ -228,7 +228,7 @@ class ContourAdapter(BaseAdapter):
                 # Landmark-based contours
                 if config.contour_mode in ("landmarks", "both") and self._pose:
                     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    results = self._pose.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), 0)
+                    results = self._pose.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(frame_idx * 1000 / fps if fps > 0 else frame_idx * 1000 // 30))
                     
                     if results.pose_landmarks:
                         points, connections = self._extract_landmark_contours(
